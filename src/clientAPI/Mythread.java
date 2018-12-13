@@ -56,6 +56,7 @@ public class Mythread extends Thread {
 	                    case 102: msg102(jsonObject); break;
 	                    case 104: msg104(jsonObject); break;
 	                    case 901: msg901(jsonObject); break;
+	                    case 9999: break;
 	                    default: LOG("error commond %d", commond);
 	                }
             		left = 4;

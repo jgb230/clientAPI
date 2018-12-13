@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.Date;
 import java.util.Formatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -16,8 +18,6 @@ public class ClientAPi{
 	
 	public static  Socket socket = null;
 	public static InputStream in = null;
-    public static final int port = 2345;
-    public static final String ip = "172.16.0.27";
     public static final String CHARCODE = "utf-8";
     public static OutputStream socketOut = null;
     
@@ -25,16 +25,16 @@ public class ClientAPi{
     public static String m_randomSeed;
     public static Mythread mt = null;
     public static int m_result;
+    public static long m_heartTime = 0;
     
-    public static String m_appId = "";
-    public static String m_appKey = "";
-    public static int m_type = 1;
-    
+    private Map<Integer, String> m_loginId = new ConcurrentHashMap<>();
     public Lock m_ulock = new ReentrantLock();  
     public Condition m_ucond = m_ulock.newCondition();
     
     public Lock m_slock = new ReentrantLock(); 
     public Condition m_scond = m_slock.newCondition();
+    
+    private Info m_info = new Info();
     
     private static ClientAPi instance=null;
     private ClientAPi(){
@@ -50,7 +50,8 @@ public class ClientAPi{
     public void SocketData() {
         try {
             // 得到socket连接
-            socket = new Socket(ip, port);
+            socket = new Socket(m_info.getIp(), m_info.getPort());
+            socket.setSoTimeout(5000);
             System.out.println("socket sucess");
             in= socket.getInputStream();
             socketOut = socket.getOutputStream();
@@ -63,7 +64,11 @@ public class ClientAPi{
     	int time = 0;
     	while (time >= 3) {
     		try {
-        		socket = new Socket(ip, port);
+        		socket = new Socket(m_info.getIp(), m_info.getPort());
+        		for (int key : m_loginId.keySet()) {
+        			int [] aid = new int[1];
+        			login(m_loginId.get(key), aid);
+        		}
         		return 0;
         	}catch(IOException e){
         		 e.printStackTrace();
@@ -75,9 +80,13 @@ public class ClientAPi{
     }
     
     public void sendHeartBeat() throws IOException {
+    	long nowTime = new Date().getTime();
+    	if (nowTime - m_heartTime < 30) {
+    		return;
+    	}
+    	m_heartTime = nowTime;
     	Map<String, Object> map = new HashMap<String, Object>();
-		map.put("nowTime", 0);
-		    	
+		map.put("nowTime", m_heartTime);
     	Trans.wirte(socketOut, (short)9999, map);
     }
     
@@ -86,20 +95,27 @@ public class ClientAPi{
     	mt.start();
     }
     
-    public int initClient(String appId, String appKey, int type) {
+    public int initClient(Info info) {
+    	if(info.getAppId().isEmpty() || 
+    	   info.getAppKey().isEmpty() ||
+    	   info.getIp().isEmpty() ||
+    	   info.getPort() == 0 ||
+    	   info.getVersion() == 0 ||
+    	   info.getMagic() != '$') {
+    		LOG(" client info erro!");
+    		return -1;
+    	}
+    	m_info = (Info)info.clone();
+    	Trans.init(m_info);
     	
-    	m_appId = appId;
-        m_appKey = appKey;
-        m_type = type;
-        
     	ClientAPi.getInstance().SocketData();
     	ClientAPi.getInstance().start();
-    	int ret = ClientAPi.getInstance().servLogin(m_appId, m_type);
+    	int ret = ClientAPi.getInstance().servLogin(m_info.getAppId(), m_info.getType());
         if (ret != 0){
             LOG("servLogin error! errno:%d", ret);
             return ret;
         }
-        ret = ClientAPi.getInstance().servAuth(m_appId, m_appKey);
+        ret = ClientAPi.getInstance().servAuth(m_info.getAppId(), m_info.getAppKey());
         if (ret != 0){
             LOG("servAuth error! errno:%d", ret);
             return ret;
@@ -107,35 +123,17 @@ public class ClientAPi{
         return ret;
     }
     
-    public int initClient(String appId, String appKey) {
-    	m_appId = appId;
-        m_appKey = appKey;
-        m_type = 1;
-    	ClientAPi.getInstance().SocketData();
-    	ClientAPi.getInstance().start();
-    	int ret = ClientAPi.getInstance().servLogin(m_appId, m_type);
-        if (ret != 0){
-            LOG("servLogin error! errno:%d", ret);
-            return ret;
-        }
-        ret = ClientAPi.getInstance().servAuth(m_appId, m_appKey);
-        if (ret != 0){
-            LOG("servAuth error! errno:%d", ret);
-            return ret;
-        }
-        return ret;
-    }
     
     public int sendMsg(int uid, String msg){
-        return ClientAPi.getInstance().aichat(uid, msg, m_appId);
+        return ClientAPi.getInstance().aichat(uid, msg, m_info.getAppId());
     }
 
     public int login(String proId, int[] Mid){
-        return ClientAPi.getInstance().login(m_appId, proId, Mid);
+        return ClientAPi.getInstance().login(m_info.getAppId(), proId, Mid);
     }
 
     public int logout(String proId, int uid){
-        return ClientAPi.getInstance().logout(m_appId, proId, uid);
+        return ClientAPi.getInstance().logout(m_info.getAppId(), proId, uid);
     }
     
     public void setRecvHandler(CallBack cb) {
@@ -249,7 +247,7 @@ public class ClientAPi{
 			e.printStackTrace();
 		}
 		m_ulock.unlock();
-
+		m_loginId.put(m_uid, proId);
         return ret == 1? 0:ret ;
     }
 
@@ -268,7 +266,7 @@ public class ClientAPi{
             LOG("send socket close ");
             return -1;
         }
-        
+        m_loginId.remove(uid);
         return 0;
     }
 

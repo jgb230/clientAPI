@@ -14,9 +14,12 @@ import java.util.Map;
 import com.alibaba.fastjson.JSON;
 
 public class Trans {
-	public static char  g_version = 0x01;
-    public static char  g_magic = '$'; 
+
     public static final String CHARCODE = "utf-8";
+    public static Info m_info = new Info();
+    public static void init(Info info) {
+    	m_info = info;
+    }
     
     public static int read(InputStream in, byte[] buffer, int position, int len) throws IOException {
     	byte[] temBuf = new byte[len];
@@ -28,7 +31,10 @@ public class Trans {
         		buffer[position + i] = temBuf[i];
         	}
             ret = readLen;
-		}catch (java.net.SocketException e) {
+    	}catch (java.net.SocketTimeoutException e) {
+    		ClientAPi.getInstance().sendHeartBeat();
+    		ret = 0;
+    	}catch (java.net.SocketException e) {
 			ret = ClientAPi.getInstance().reconnect();
 		}catch(IOException e) {
 			e.printStackTrace();
@@ -58,6 +64,14 @@ public class Trans {
             socketOut.write(msg.getBytes(CHARCODE));
             socketOut.flush();
             ret = length;
+		}catch (java.net.SocketTimeoutException e) {
+			try {
+				ClientAPi.getInstance().sendHeartBeat();
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+    		ret = 0;
 		}catch (java.net.SocketException e) {
 			//reconnect 
 			ret = 0;
@@ -87,8 +101,8 @@ public class Trans {
     	setInt(0, head, 0);
     	setInt(0, head, 4);
     	setShort(commond, head, 8);
-    	setChar(g_version, head, 10);
-    	setChar(g_magic, head, 11);
+    	setChar(m_info.getVersion(), head, 10);
+    	setChar(m_info.getMagic(), head, 11);
     	setShort((short)0, head, 12);
     	return head;
     }
