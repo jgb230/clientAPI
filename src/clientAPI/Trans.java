@@ -47,7 +47,7 @@ public class Trans {
     public static int wirte(OutputStream socketOut, short commond, Map<String, Object> map){
     	
     	byte[] head = Trans.buildHead(commond);
-    	LOG("sendmsg %s",map.toString());
+    	LOG("sendmsg commond %3d %s", commond, map.toString());
     	String msg = JSON.toJSONString(map);
     	int length = 0;
 		try {
@@ -59,7 +59,7 @@ public class Trans {
 		}
     	int ret = 0;
     	try {
-    		LOG("head %s ", byteArrayToHexString(head));
+    		//LOG("head %s ", byteArrayToHexString(head));
     		socketOut.write(head);
             socketOut.write(msg.getBytes(CHARCODE));
             socketOut.flush();

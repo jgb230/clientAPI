@@ -28,8 +28,8 @@ public class ClientAPi{
     public static long m_heartTime = 0;
     
     private Map<Integer, String> m_loginId = new ConcurrentHashMap<>();
-    public Lock m_ulock = new ReentrantLock();  
-    public Condition m_ucond = m_ulock.newCondition();
+    public static RWLock m_rwLock = new RWLock();
+
     
     public Lock m_slock = new ReentrantLock(); 
     public Condition m_scond = m_slock.newCondition();
@@ -132,7 +132,7 @@ public class ClientAPi{
         return ClientAPi.getInstance().login(m_info.getAppId(), proId, Mid);
     }
 
-    public int logout(String proId, int uid){
+    public int logout(String proId, int uid) throws InterruptedException{
         return ClientAPi.getInstance().logout(m_info.getAppId(), proId, uid);
     }
     
@@ -236,22 +236,33 @@ public class ClientAPi{
             LOG("send socket close ");
             return -1;
         }
-        
-        m_ulock.lock();
+        int tmpid = 0;
         try {
-			m_ucond.await();
-			ret = m_result;
-			Mid[0] = m_uid;
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		m_ulock.unlock();
-		m_loginId.put(m_uid, proId);
+        	do{
+            	m_rwLock.lock_read();
+                tmpid = recvedUid(proId);
+                ret = m_result;
+                m_rwLock.release_read();
+            }while ( tmpid == 0 );
+        }catch (Exception e) {
+        	LOG("----------login");
+        	e.printStackTrace();
+        }
+        
+        Mid[0] = tmpid;
         return ret == 1? 0:ret ;
     }
 
-    public int logout(String appId, String proId, int uid){
+    int recvedUid(String proId){
+        
+    	for(Object key: m_loginId.keySet()){
+            if(m_loginId.get(key).equals(proId)){
+                return (int) key;
+            }
+        }
+        return 0;
+    }
+    public int logout(String appId, String proId, int uid) throws InterruptedException{
     	
         Map<String, Object> map = new HashMap<String, Object>();
 		map.put("uid", uid);
@@ -266,17 +277,23 @@ public class ClientAPi{
             LOG("send socket close ");
             return -1;
         }
+        m_rwLock.lock_read();
         m_loginId.remove(uid);
+        m_rwLock.release_read();
         return 0;
     }
 
-    public void setUid(int uid, int result){
+    public void setUid(int uid, int result, String proId){
     	
-    	m_ulock.lock();
-        m_uid = uid;
-		m_result = result;
-		m_ucond.signalAll();
-		m_ulock.unlock();
+    	try {
+			m_rwLock.lock_write();
+			m_result = result;
+	        m_loginId.put(uid, proId);
+	    	m_rwLock.release_write();
+    	} catch (InterruptedException e) {
+			LOG("----------setUid");
+			e.printStackTrace();
+		}
 
     }
 

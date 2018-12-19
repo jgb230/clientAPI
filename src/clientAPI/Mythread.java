@@ -32,10 +32,10 @@ public class Mythread extends Thread {
             int right = 0;
             boolean gHead = true;
             short commond = 0;
-            System.out.println("recv begin");
+            //System.out.println("recv begin");
             while (left > 0) {
             	len = Trans.read(in, buffer, right, left);
-            	System.out.println("recv len " + len);
+            	//System.out.println("recv len " + len);
             	left -= len;
             	right += len;
             	if (left != 0) {
@@ -47,9 +47,8 @@ public class Mythread extends Thread {
             		gHead = false;
             	}else {
             		commond = Trans.Byte2Short(Arrays.copyOfRange(buffer, 4, 6));
-            		System.out.println("commond " + commond);
             		JSONObject jsonObject = JSON.parseObject(new String(Arrays.copyOfRange(buffer, 10, right)));
-            		System.out.println(jsonObject);
+            		LOG("recvmsg commond %3d %s ", commond, jsonObject);
             		switch (commond){
 	                    case 301: msg301(jsonObject); break;
 	                    case 302: msg302(jsonObject); break;
@@ -83,7 +82,7 @@ public class Mythread extends Thread {
             if (jsonObject.containsKey("randomSeed")){
                 randomSeed = (String) jsonObject.get("randomSeed");
             }
-            LOG("randomSeed: %s, result %d", randomSeed, result); 
+            //LOG("randomSeed: %s, result %d", randomSeed, result); 
         }
         ClientAPi.getInstance().setSeed(randomSeed, result);
         return 0;
@@ -98,7 +97,7 @@ public class Mythread extends Thread {
         if (result != 1){
             LOG("msg: %s result: %d", jsonObject.get("msg"), result);
         }else {
-            LOG("auth result:%d", result);
+            //LOG("auth result:%d", result);
         }
         return 0;
     }
@@ -109,15 +108,19 @@ public class Mythread extends Thread {
             result = (int) jsonObject.get("result");
         }
         int uid = 0;
+        String proId = "";
         if (result != 1){
             LOG("msg: %s, result: %d", jsonObject.get("msg"), result);
         }else {
             if (jsonObject.containsKey("uid")){
                 uid = (int) jsonObject.get("uid");
             }
-            LOG("login uid: %d , result: %d", uid, result); 
+            if (jsonObject.containsKey("seq")){
+            	proId = (String) jsonObject.get("seq");
+            }
+            //LOG("login uid: %d , result: %d", uid, result); 
         }
-        ClientAPi.getInstance().setUid(uid, result);
+        ClientAPi.getInstance().setUid(uid, result, proId);
         return 0;
     }
 
@@ -137,7 +140,7 @@ public class Mythread extends Thread {
             if (jsonObject.containsKey("seq")){
                 seq = (String) jsonObject.get("seq");
             }
-            LOG("logout uid: %d, seq: %s", uid, seq); 
+            //LOG("logout uid: %d, seq: %s", uid, seq); 
         }
         return 0;
     }
@@ -153,7 +156,7 @@ public class Mythread extends Thread {
             return -1;
         }else {
             m_cb.callBack(jsonObject);
-            LOG("aichat result: %d", result);
+            //LOG("aichat result: %d", result);
         }
         return 0;
     }
