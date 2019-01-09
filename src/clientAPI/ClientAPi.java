@@ -16,25 +16,24 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class ClientAPi{
 	
-	public static  Socket socket = null;
-	public static InputStream in = null;
-    public static final String CHARCODE = "utf-8";
-    public static OutputStream socketOut = null;
+	public static Socket socket = null; // 收发数据socket连接
+	public static InputStream in = null; // socket输入流
+    public static OutputStream socketOut = null; // socket输出流
     
-    public static int m_uid;
-    public static String m_randomSeed;
-    public static Mythread mt = null;
-    public static int m_result;
-    public static long m_heartTime = 0;
-    
-    private Map<Integer, String> m_loginId = new ConcurrentHashMap<>();
-    public static RWLock m_rwLock = new RWLock();
+    public static final String CHARCODE = "utf-8"; // 传输同一utf-8编码
 
+    public static Mythread mt = null;  // 异步接受消息线程
+    public static int m_result;  // 消息返回码
+    public static long m_heartTime = 0; // 心跳消息包
     
-    public Lock m_slock = new ReentrantLock(); 
-    public Condition m_scond = m_slock.newCondition();
-    
-    private Info m_info = new Info();
+    private Map<Integer, String> m_loginId = new ConcurrentHashMap<>(); // 登录用户列表
+    public static RWLock m_rwLock = new RWLock(); // 登录用户列表读写锁
+
+    public Lock m_slock = new ReentrantLock(); // 账号验证同步锁
+    public Condition m_scond = m_slock.newCondition(); // 账号验证同步条件变量
+    public static String m_randomSeed; // 账号验证种子
+
+    private Info m_info = new Info(); // 初始化信息类
     
     private static ClientAPi instance=null;
     private ClientAPi(){
@@ -49,10 +48,10 @@ public class ClientAPi{
     
     public void SocketData() {
         try {
-            // 得到socket连接
+            // 得到socket连接，设置5秒超时
             socket = new Socket(m_info.getIp(), m_info.getPort());
             socket.setSoTimeout(5000);
-            System.out.println("socket sucess");
+            LOG("socket sucess");
             in= socket.getInputStream();
             socketOut = socket.getOutputStream();
         } catch (IOException e) {
@@ -61,14 +60,31 @@ public class ClientAPi{
     }
     
     public int reconnect() {
+    	// socket重连，重连4次失败，返回失败，成功重新登录所有已登录用户
     	int time = 0;
-    	while (time >= 3) {
+    	while (time <= 3) {
     		try {
         		socket = new Socket(m_info.getIp(), m_info.getPort());
-        		for (int key : m_loginId.keySet()) {
-        			int [] aid = new int[1];
-        			login(m_loginId.get(key), aid);
-        		}
+        		String appId = "";
+            	String appKey = "";
+            	int type = 0;
+            	int ret = 0;
+            	for (App ap:m_info.getAppId_key()) {
+            		appId = ap.getAppId();
+            		appKey = ap.getAppKey();
+            		type = ap.getType();
+            		ret = ClientAPi.getInstance().servLogin(appId, type);
+                    if (ret != 0){
+                        LOG("servLogin error! errno:%d", ret);
+                        return ret;
+                    }
+                    // 服务器验证
+                    ret = ClientAPi.getInstance().servAuth(appKey, appKey);
+                    if (ret != 0){
+                        LOG("servAuth error! errno:%d", ret);
+                        return ret;
+                    }
+            	}
         		return 0;
         	}catch(IOException e){
         		 e.printStackTrace();
@@ -80,6 +96,7 @@ public class ClientAPi{
     }
     
     public void sendHeartBeat() throws IOException {
+    	// 发送心跳包，保持连接
     	long nowTime = new Date().getTime();
     	if (nowTime - m_heartTime < 30) {
     		return;
@@ -91,13 +108,16 @@ public class ClientAPi{
     }
     
     public void start() {
+    	// 启动接收消息线程
     	mt = new Mythread(socket);
     	mt.start();
     }
     
-    public int initClient(Info info) {
-    	if(info.getAppId().isEmpty() || 
-    	   info.getAppKey().isEmpty() ||
+    public int initClient(Info info, CallBack cb) {
+    	// 初始化消息客户端，启动接收消息线程，服务器登录并验证
+    	if(info.getAppId_key().size() == 0 || 
+    	   info.getAppId_key().firstElement().getAppId().length() == 0 || 
+    	   info.getAppId_key().firstElement().getAppKey().length() == 0 ||
     	   info.getIp().isEmpty() ||
     	   info.getPort() == 0 ||
     	   info.getVersion() == 0 ||
@@ -108,39 +128,45 @@ public class ClientAPi{
     	m_info = (Info)info.clone();
     	Trans.init(m_info);
     	
+    	// 启动接收消息线程
     	ClientAPi.getInstance().SocketData();
     	ClientAPi.getInstance().start();
-    	int ret = ClientAPi.getInstance().servLogin(m_info.getAppId(), m_info.getType());
-        if (ret != 0){
-            LOG("servLogin error! errno:%d", ret);
-            return ret;
-        }
-        ret = ClientAPi.getInstance().servAuth(m_info.getAppId(), m_info.getAppKey());
-        if (ret != 0){
-            LOG("servAuth error! errno:%d", ret);
-            return ret;
-        }
+    	// 服务器登录
+    	String appId = "";
+    	String appKey = "";
+    	int type = 0;
+    	int ret = 0;
+    	for (App ap:m_info.getAppId_key()) {
+    		appId = ap.getAppId();
+    		appKey = ap.getAppKey();
+    		type = ap.getType();
+    		ret = ClientAPi.getInstance().servLogin(appId, type);
+            if (ret != 0){
+                LOG("servLogin error! errno:%d", ret);
+                return ret;
+            }
+            // 服务器验证
+            ret = ClientAPi.getInstance().servAuth(appKey, appKey);
+            if (ret != 0){
+                LOG("servAuth error! errno:%d", ret);
+                return ret;
+            }
+    	}
+    	
+        
+        // 设置服务器返回的交互消息的回调函数cb
+    	mt.setCallBack(cb);
         return ret;
     }
     
     
-    public int sendMsg(int uid, String msg){
-        return ClientAPi.getInstance().aichat(uid, msg, m_info.getAppId());
-    }
-
-    public int login(String proId, int[] Mid){
-        return ClientAPi.getInstance().login(m_info.getAppId(), proId, Mid);
-    }
-
-    public int logout(String proId, int uid) throws InterruptedException{
-        return ClientAPi.getInstance().logout(m_info.getAppId(), proId, uid);
-    }
-    
-    public void setRecvHandler(CallBack cb) {
-    	mt.setCallBack(cb);
+    public int sendMsg(String appId, int uid, String msg){
+    	// 向服务器发送uid用户的交互信息msg
+        return ClientAPi.getInstance().aichat(uid, msg, appId);
     }
 
     public int servLogin(String appId, int type){
+    	// 服务器appId账号以type形式登录， 与接收消息线程保持同步
     	Map<String, Object> map = new HashMap<String, Object>();
 		map.put("servType", type);
 		map.put("appid", appId);
@@ -169,6 +195,7 @@ public class ClientAPi{
 
    
     public int servAuth(String appId,String appKey){
+    	// 服务器appId账号appKey验证,md5加密服务器登录时返回的种子+appKey， 与接收消息线程保持同步
         String data = m_randomSeed + appKey;
 		String sign = Trans.MD5Encode(data);
 
@@ -201,7 +228,7 @@ public class ClientAPi{
 
 
     public int aichat(int uid,String msg,String appId){
-        
+        // 向服务器发送appId下uid用户的交互信息msg， 与接收消息线程异步
         Map<String, Object> map = new HashMap<String, Object>();
 		map.put("uid", uid);
 		map.put("content", msg);
@@ -219,8 +246,8 @@ public class ClientAPi{
         return 0;
     }   
 
-    public int login(String appId, String proId, int[] Mid){
-
+    public int login( String appId, String proId, int[] Mid){
+    	// appId下proId用户登录，返回的uid放入Mid返回，与接收消息线程保持同步
         Map<String, Object> map = new HashMap<String, Object>();
 		map.put("uname", proId);
 		map.put("passwd", "");
@@ -254,7 +281,6 @@ public class ClientAPi{
     }
 
     int recvedUid(String proId){
-        
     	for(Object key: m_loginId.keySet()){
             if(m_loginId.get(key).equals(proId)){
                 return (int) key;
@@ -263,7 +289,7 @@ public class ClientAPi{
         return 0;
     }
     public int logout(String appId, String proId, int uid) throws InterruptedException{
-    	
+    	// 发送proid用户登出消息，并从已登录列表删除
         Map<String, Object> map = new HashMap<String, Object>();
 		map.put("uid", uid);
 		map.put("appid", appId);

@@ -22,6 +22,11 @@ public class Mythread extends Thread {
 		m_cb = cb;
 	}
 	
+	
+	// 收包处理函数 循环处理服务器发送过来的消息
+	// 消息结构 消息头(14字节)+消息体(json格式) 
+	// 消息头 长度（4字节）（10 + 消息体长度）+ 校验(4字节 目前没用到) + 消息号(2字节) + 版本号(1字节) + 快捷校验(1字节) + retcode（2字节）
+
 	public void run() {
 		super.run();
 		try {
@@ -71,6 +76,7 @@ public class Mythread extends Thread {
 	
 	
     int msg301(JSONObject jsonObject){
+    	// 处理服务器登录返回包，并与主线程同步
         int result = 0;
         if (jsonObject.containsKey("result") ){
             result = (int) jsonObject.get("result");
@@ -89,6 +95,7 @@ public class Mythread extends Thread {
     }
 
     int msg302(JSONObject jsonObject){
+    	// 处理服务器验证返回包，并与主线程同步
         int result = 0;
         if (jsonObject.containsKey("result")){
             result = (int) jsonObject.get("result");
@@ -103,6 +110,7 @@ public class Mythread extends Thread {
     }
 
     int msg102(JSONObject jsonObject){
+    	// 处理用户登录返回包，并与主线程同步
         int result = 0;
         if (jsonObject.containsKey("result") ){
             result = (int) jsonObject.get("result");
@@ -125,6 +133,7 @@ public class Mythread extends Thread {
     }
 
     int msg104(JSONObject jsonObject){
+    	// 处理用户登出返回包
         int result = 0;
         if (jsonObject.containsKey("result")){
             result = (int) jsonObject.get("result");
@@ -146,6 +155,7 @@ public class Mythread extends Thread {
     }
 
     int msg901(JSONObject jsonObject){
+    	// 处理用户交互返回消息，调用回调函数处理
         int result = 0;
 
         if (jsonObject.containsKey("result")){

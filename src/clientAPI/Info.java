@@ -1,32 +1,16 @@
 package clientAPI;
 
+import java.util.Vector;
+
 public class Info implements Cloneable{
 
-	private String appId;
-	private String appKey;
-	private int type;
+	private Vector<App> appId_key = new Vector<App>();
+	
 	private String ip;
 	private int port;
 	private char version;
 	private char magic;
-	public String getAppId() {
-		return appId;
-	}
-	public void setAppId(String appId) {
-		this.appId = appId;
-	}
-	public String getAppKey() {
-		return appKey;
-	}
-	public void setAppKey(String appKey) {
-		this.appKey = appKey;
-	}
-	public int getType() {
-		return type;
-	}
-	public void setType(int type) {
-		this.type = type;
-	}
+	
 	public String getIp() {
 		return ip;
 	}
@@ -60,6 +44,14 @@ public class Info implements Cloneable{
 			e.printStackTrace();
 		}
 		return addr;
+	}
+	
+	public Vector<App> getAppId_key() {
+		return appId_key;
+	}
+	
+	public void addAppId_key(App app) {
+		this.appId_key.add(app);
 	}
 	
 	

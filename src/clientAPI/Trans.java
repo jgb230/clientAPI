@@ -45,6 +45,9 @@ public class Trans {
     }
     
     public static int wirte(OutputStream socketOut, short commond, Map<String, Object> map){
+    	// 按协议组织发包，
+    	// 消息结构 消息头(14字节)+消息体(json格式) 
+    	// 消息头 长度（4字节）（10 + 消息体长度）+ 校验(4字节 目前没用到) + 消息号(2字节) + 版本号(1字节) + 快捷校验(1字节) + retcode（2字节）
     	
     	byte[] head = Trans.buildHead(commond);
     	LOG("sendmsg commond %3d %s", commond, map.toString());
@@ -93,9 +96,7 @@ public class Trans {
           }
           return sb.toString();
      }
-
-  
-    
+    // 拼装协议头
     public static byte[] buildHead(short commond) {
     	byte [] head = new byte[14];
     	setInt(0, head, 0);
@@ -106,7 +107,7 @@ public class Trans {
     	setShort((short)0, head, 12);
     	return head;
     }
-    
+    // 在head begin处设置char c
     private static void setChar(char c, byte[] head, int begin) {
     	char[] cc = new char[1];
     	cc[0] = c;
@@ -115,27 +116,28 @@ public class Trans {
     		head[begin + i] = bb[i];
     	}
 	}
-    
+    // 在head begin处设置commond
     private static void setShort(short commond, byte[] head, int begin) {	
     	byte[]bytes = ShortToByte(commond);
     	for (int i = 0; i < bytes.length; ++i) {
     		head[begin + i] = bytes[i];
     	}
 	}
+    // 	在head begin处设置num
 	public static void setInt(int num, byte [] head, int begin) {
     	byte[]bytes = IntToByte(num);
     	for (int i = 0; i < bytes.length; ++i) {
     		head[begin + i] = bytes[i];
     	}
     }
-    
+    // byte数组转换成int
     public static int Byte2Int(byte[]bytes) {
 		return (bytes[3]&0xff)<<24
 			| (bytes[2]&0xff)<<16
 			| (bytes[1]&0xff)<<8
 			| (bytes[0]&0xff);
 	}
-    
+    // int转换成byte数组
     public static byte[] IntToByte(int num){
 		byte[]bytes=new byte[4];
 		bytes[3]=(byte) ((num>>24)&0xff);
@@ -144,19 +146,19 @@ public class Trans {
 		bytes[0]=(byte) (num&0xff);
 		return bytes;
     }
-    
+    // byte数组转换成short
     public static short Byte2Short(byte[]bytes) {
 		return (short) ( (bytes[1]&0xff)<<8
 			| (bytes[0]&0xff));
 	}
-    
+    // short转换成byte数组
     public static byte[] ShortToByte(short num){
 		byte[]bytes=new byte[2];
 		bytes[1]=(byte) ((num>>8)&0xff);
 		bytes[0]=(byte) (num&0xff);
 		return bytes;
     }
-    
+    // char数组转换成byte数组
     private static byte[] getBytes (char[] chars) {
 	   Charset cs = Charset.forName(CHARCODE);
 	   CharBuffer cb = CharBuffer.allocate(chars.length);
@@ -166,7 +168,7 @@ public class Trans {
 	   return bb.array();
 	 }
 
-
+    // byte数组转换成char数组
 	private static char[] getChars (byte[] bytes) {
       Charset cs = Charset.forName(CHARCODE);
       ByteBuffer bb = ByteBuffer.allocate(bytes.length);
